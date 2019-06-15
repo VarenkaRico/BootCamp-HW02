@@ -1,0 +1,114 @@
+Sub StockValues()
+
+Dim sht_num As Integer 'Total Sheets
+Dim t_Total As Double 'Total Tickers
+Dim R_total As Double 'Total Rows
+Dim C_total As Double 'Total Columns
+Dim i As Double 'Active Sheet
+Dim ActR As Double 'Active Row
+Dim ActC As Double 'Active Column
+
+
+'--------------------------------------------------------------------
+'1. LOOP HOJAS
+sht_num = ActiveWorkbook.Worksheets.Count
+
+For i = 1 To sht_num
+
+    ActiveWorkbook.Worksheets(i).Select
+    R_total = Cells(Rows.Count, 1).End(xlUp).Row
+    C_total = Cells(Columns.Count).End(xlToLeft).Column
+
+    Range("I1") = "Ticker"
+    Range("J1") = "Yearly Change"
+    Range("K1") = "Percentage Change"
+    Range("L1") = "Total Stock Amount"
+    Range("M1") = "Open"
+    Range("N1") = "Close"
+
+'CREAR TABLA DINÁMICA PARA LISTA DE TICKERS Y SUMA VOLUMEN
+    Worksheets.Add(After:=Worksheets(i)).Name = "Summary"
+    Worksheets(i).Activate
+
+    ActiveWorkbook.PivotCaches.Create(SourceType:=xlDatabase, SourceData:=Range(Cells(1, 1), Cells(R_total, C_total)), Version:=6).CreatePivotTable TableDestination:= _
+    Sheets("Summary").Range("A1"), TableName:="Tickers", DefaultVersion:=6
+
+    Worksheets("Summary").Activate
+
+    With Sheets("Summary").PivotTables("Tickers").PivotFields("<ticker>")
+        .Orientation = xlRowField
+    End With
+
+    Sheets("Summary").PivotTables("Tickers").AddDataField ActiveSheet.PivotTables( _
+    "Tickers").PivotFields("<vol>"), "Total vol", xlSum
+
+
+'COPIAR TICKERS Y TOTAL VOLUMEN
+    
+
+    t_Total = Cells(Rows.Count, 1).End(xlUp).Row
+ 
+    Range(Cells(2, 1), Cells(t_Total - 1, 1)).Copy 'Tickers
+    Worksheets(i).Activate
+    Range("I2").PasteSpecial xlPasteValues
+ 
+    Worksheets("Summary").Activate
+    Range(Cells(2, 2), Cells(t_Total - 1, 2)).Copy 'Volumen
+    Worksheets(i).Activate
+    Range("L2").PasteSpecial xlPasteValues
+
+    Application.DisplayAlerts = False
+    Worksheets("Summary").Delete
+    Application.DisplayAlerts = True
+
+
+'OPEN EN DÍA 1 Y CLOSE EN DÍA ÚLTIMO
+    Range("M2").Formula = "=SUMIFS(C:C,A:A,I2,B:B,MINIFS(B:B,A:A,I2))"
+    Range("N2").Formula = "=SUMIFS(F:F,A:A,I2,B:B,MAXIFS(B:B,A:A,I2))"
+    Range("M2:N2").Copy
+    Range("M2:N" & t_Total - 1).PasteSpecial xlPasteFormulas
+    Range("M2:N" & t_Total - 1).Copy
+    Range("M2:N" & t_Total - 1).PasteSpecial xlPasteValues
+
+'CALCULAR DIFERENCIA Y CAMBIO
+For t = 2 To t_Total - 1
+        
+        Range("K" & t).FormulaR1C1 = "=IFERROR(RC[3]/RC[2]-1,""NA"")"
+        Range("K" & t).NumberFormat = "0.00%"
+        Range("J" & t).FormulaR1C1 = "=RC[4]-RC[3]"
+        With Range("J" & t).FormatConditions.Add(xlCellValue, xlGreater, "=0")
+            .Interior.Color = vbGreen
+        End With
+        
+        With Range("J" & t).FormatConditions.Add(xlCellValue, xlLess, "=0")
+            .Interior.Color = vbRed
+        End With
+        
+        Range("I" & t & ":N" & t).Copy
+        Range("I" & t & ":N" & t).PasteSpecial xlPasteValues
+    Next t
+
+'CUADRO RESUMEN HOJA
+Range("R1") = "Ticker"
+Range("S1") = "Value"
+Range("Q2") = "Greatest % Increase"
+Range("Q3") = "Greatest % Decrease"
+Range("Q4") = "Greatest Total Volume"
+
+Range("R2").Formula = "=INDEX(I:I,MATCH(MAX(K:K),K:K,0))"
+Range("S2").Formula = "=INDEX(K:K,MATCH(MAX(K:K),K:K,0))"
+Range("R3").Formula = "=INDEX(I:I,MATCH(MIN(K:K),K:K,0))"
+Range("S3").Formula = "=INDEX(K:K,MATCH(MIN(K:K),K:K,0))"
+Range("R4").Formula = "=INDEX(I:I,MATCH(MAX(L:L),L:L,0))"
+Range("S4").Formula = "=INDEX(L:L,MATCH(MAX(L:L),L:L,0))"
+
+Range("S2:S3").NumberFormat = "0.00%"
+
+Range("R2:S4").Copy
+Range("R2:S4").PasteSpecial xlPasteValues
+
+Range("M:N").Delete
+
+
+Next i
+End Sub
